@@ -138,10 +138,11 @@ jobs:
 
       - name: Inspect published image
         run: |
+          IMAGE_REF="${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.image_name }}@${{ steps.push.outputs.digest }}"
           echo "=== Image digest ==="
           echo "${{ steps.push.outputs.digest }}"
-          echo "=== Attempting inspection (may fail if not yet available) ==="
-          docker run --rm "${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.image_name }}@${{ steps.push.outputs.digest }}" --version 2>&1 || echo "Version flag not available"
+          echo "=== Inspecting published manifest ==="
+          docker buildx imagetools inspect "$IMAGE_REF"
 
       - name: Scan published image (Trivy)
         id: trivy
