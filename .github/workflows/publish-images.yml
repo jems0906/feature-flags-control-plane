@@ -102,6 +102,15 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: Verify build context
+        run: |
+          echo "=== Dockerfile location ==="
+          ls -lh "${{ matrix.dockerfile }}"
+          echo "=== Build context structure ==="
+          find . -type f -name "*.go" -path "*${{ matrix.image_name }}*" | head -20
+          echo "=== go.mod files ==="
+          find . -type f -name "go.mod"
+
       - name: Extract Docker metadata
         id: meta
         uses: docker/metadata-action@v5
@@ -122,16 +131,46 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            GOFLAGS=-v
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.image_name }}:buildcache
+          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.image_name }}:buildcache,mode=max
+
+      - name: Inspect published image
+        run: |
+          echo "=== Image digest ==="
+          echo "${{ steps.push.outputs.digest }}"
+          echo "=== Attempting inspection (may fail if not yet available) ==="
+          docker run --rm "${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.image_name }}@${{ steps.push.outputs.digest }}" --version 2>&1 || echo "Version flag not available"
 
       - name: Scan published image (Trivy)
+        id: trivy
         uses: aquasecurity/trivy-action@v0.35.0
+        continue-on-error: true
         with:
           image-ref: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.image_name }}@${{ steps.push.outputs.digest }}
-          format: table
+          format: sarif
+          output: trivy-results.sarif
           ignore-unfixed: true
           vuln-type: os,library
           severity: CRITICAL
-          exit-code: '1'
+
+      - name: Report Trivy scan results
+        run: |
+          if [ -f trivy-results.sarif ]; then
+            echo "=== Trivy Scan Results ==="
+            cat trivy-results.sarif | jq '.runs[0].results | length' || echo "No SARIF output available"
+            if [ "$(jq -r '.runs[0].results | length' trivy-results.sarif 2>/dev/null || echo '0')" -gt "0" ]; then
+              echo "⚠️  CRITICAL vulnerabilities found:"
+              jq -r '.runs[0].results[] | select(.level=="error") | .message.text' trivy-results.sarif 2>/dev/null || true
+              exit 1
+            else
+              echo "✓ No CRITICAL vulnerabilities found"
+            fi
+          else
+            echo "⚠️  Trivy scan did not complete; image may not be available yet"
+            exit 1
+          fi
 
       - name: Install cosign
         uses: sigstore/cosign-installer@v3

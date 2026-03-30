@@ -1,0 +1,39 @@
+# Git and version control
+.git
+.gitignore
+.gitattributes
+
+# IDE and editor files
+.vscode
+.idea
+*.swp
+*.swo
+*.swn
+.DS_Store
+Thumbs.db
+
+# CI/CD
+.github
+.gitlab-ci.yml
+.circleci
+
+# Documentation
+docs
+*.md
+LICENSE
+
+# Test fixtures
+control-plane/data
+microservice-demo/data
+*_test.go
+*.test
+
+# SDK artifacts (only needed for service builds)
+sdk/__pycache__
+sdk/node_modules
+sdk/*.pyc
+
+# Deployment and local dev
+deploy
+.venv
+*.log

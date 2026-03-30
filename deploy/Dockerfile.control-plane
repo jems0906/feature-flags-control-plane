@@ -1,9 +1,15 @@
 FROM golang:1.22-alpine AS builder
 WORKDIR /app
-COPY control-plane/go.mod ./
+
+# Copy only go.mod first for better layer caching
+COPY control-plane/go.mod .
+RUN go mod download
+
+# Copy source code
 COPY control-plane/ ./
-# No external dependencies — build directly
-RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags "-s -w" -o /control-plane .
+
+# Build with aggressive optimizations for minimal binary
+RUN CGO_ENABLED=0 GOOS=linux GOFLAGS=-v go build -trimpath -ldflags "-s -w" -o /control-plane .
 
 FROM scratch
 COPY --from=builder /control-plane /control-plane
