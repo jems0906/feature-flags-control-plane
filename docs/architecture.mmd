@@ -1,0 +1,10 @@
+graph TD
+    A[Client SDK] -->|Poll / SSE| B(Control Plane :8080)
+    G[Microservice Demo :8081] -->|Evaluate flags\nCheck rate limits\nGet variants| B
+    B -->|Shared config + replica sync| C[(Redis)]
+    B -->|Local dev fallback| H[(JSON File Store)]
+    B -->|GET /metrics| D[Prometheus :9090]
+    G -->|GET /metrics| D
+    D -->|Scrape| E[Grafana :3000]
+    B -->|Span logs| F[Stdout Tracer\nOTel-compatible format]
+    B -->|Breaker reports| G

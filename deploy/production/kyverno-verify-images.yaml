@@ -1,0 +1,42 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: verify-flagplane-images
+spec:
+  validationFailureAction: Enforce
+  background: false
+  rules:
+    - name: verify-control-plane-image-signature
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+      verifyImages:
+        - imageReferences:
+            - ghcr.io/jems0906/control-plane:*
+          mutateDigest: true
+          required: true
+          attestors:
+            - count: 1
+              entries:
+                - keyless:
+                    issuer: https://token.actions.githubusercontent.com
+                    subject: https://github.com/jems0906/feature-flags-control-plane/.github/workflows/publish-images.yml@refs/heads/main
+    - name: verify-microservice-demo-image-signature
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+      verifyImages:
+        - imageReferences:
+            - ghcr.io/jems0906/microservice-demo:*
+          mutateDigest: true
+          required: true
+          attestors:
+            - count: 1
+              entries:
+                - keyless:
+                    issuer: https://token.actions.githubusercontent.com
+                    subject: https://github.com/jems0906/feature-flags-control-plane/.github/workflows/publish-images.yml@refs/heads/main

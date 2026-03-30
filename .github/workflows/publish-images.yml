@@ -1,0 +1,193 @@
+name: CI/CD Build Scan Push Deploy
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      deploy:
+        description: "Deploy to cluster after publishing images"
+        required: false
+        default: false
+        type: boolean
+      namespace:
+        description: "Kubernetes namespace"
+        required: false
+        default: "flagplane"
+        type: string
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_TAG: sha-${{ github.sha }}
+
+jobs:
+  test:
+    name: Test Go Modules
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.22.x"
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Test control-plane
+        working-directory: control-plane
+        run: go test ./...
+
+      - name: Test microservice-demo
+        working-directory: microservice-demo
+        run: go test ./...
+
+      - name: Test Go SDK
+        working-directory: sdk
+        run: go test ./...
+
+      - name: Test Python SDK
+        working-directory: sdk
+        run: python featureflags_sdk_test.py
+
+      - name: Test JavaScript SDK
+        working-directory: sdk
+        run: node featureflags_sdk.test.js
+
+  build-scan-and-push:
+    name: Build Scan And Push Images
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.event_name != 'pull_request'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image_name: control-plane
+            dockerfile: deploy/Dockerfile.control-plane
+          - image_name: microservice-demo
+            dockerfile: deploy/Dockerfile.microservice-demo
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.image_name }}
+          tags: |
+            type=raw,value=${{ env.IMAGE_TAG }}
+            type=sha,prefix=
+            type=ref,event=tag
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push
+        id: push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+      - name: Scan published image (Trivy)
+        uses: aquasecurity/trivy-action@v0.35.0
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.image_name }}@${{ steps.push.outputs.digest }}
+          format: table
+          ignore-unfixed: true
+          vuln-type: os,library
+          severity: CRITICAL
+          exit-code: '1'
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Sign published image (keyless)
+        env:
+          COSIGN_EXPERIMENTAL: "true"
+        run: |
+          COSIGN_IMAGE="${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.image_name }}@${{ steps.push.outputs.digest }}"
+          cosign sign --yes "$COSIGN_IMAGE"
+
+  deploy:
+    name: Deploy And Smoke Test
+    runs-on: ubuntu-latest
+    needs: build-scan-and-push
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.deploy == 'true'
+    env:
+      NAMESPACE: ${{ github.event.inputs.namespace }}
+      CONTROL_IMAGE: ghcr.io/${{ github.repository_owner }}/control-plane:sha-${{ github.sha }}
+      DEMO_IMAGE: ghcr.io/${{ github.repository_owner }}/microservice-demo:sha-${{ github.sha }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: v1.30.0
+
+      - name: Configure kubeconfig
+        run: |
+          if [ -z "${{ secrets.KUBE_CONFIG }}" ]; then
+            echo "KUBE_CONFIG secret is required for deploy stage"
+            exit 1
+          fi
+          mkdir -p "$HOME/.kube"
+          echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > "$HOME/.kube/config"
+
+      - name: Fail fast on required cluster secrets
+        run: |
+          kubectl get namespace "$NAMESPACE" >/dev/null 2>&1 || kubectl create namespace "$NAMESPACE"
+          kubectl -n "$NAMESPACE" get secret platform-secrets >/dev/null
+          kubectl -n "$NAMESPACE" get secret alerting-secrets >/dev/null
+          kubectl -n "$NAMESPACE" get secret flagplane-tls >/dev/null
+
+      - name: Apply manifests and pin deployed images
+        run: |
+          kubectl apply -f deploy/k8s.yaml
+          kubectl -n "$NAMESPACE" set image deployment/control-plane control-plane="$CONTROL_IMAGE"
+          kubectl -n "$NAMESPACE" set image deployment/microservice-demo microservice-demo="$DEMO_IMAGE"
+          kubectl -n "$NAMESPACE" rollout status deployment/control-plane --timeout=180s
+          kubectl -n "$NAMESPACE" rollout status deployment/microservice-demo --timeout=180s
+
+      - name: Run smoke tests against live services
+        run: |
+          kubectl -n "$NAMESPACE" port-forward svc/control-plane 18080:8080 >/tmp/pf-control.log 2>&1 &
+          kubectl -n "$NAMESPACE" port-forward svc/microservice-demo 18081:8081 >/tmp/pf-demo.log 2>&1 &
+          sleep 8
+          CONTROL_PLANE_URL="http://127.0.0.1:18080" DEMO_URL="http://127.0.0.1:18081" AUTH_TOKEN="${{ secrets.CONTROL_PLANE_AUTH_TOKEN }}" bash deploy/smoke-test.sh

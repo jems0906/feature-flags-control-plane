@@ -1,0 +1,13 @@
+{
+  "name": "featureflags-sdk-samples",
+  "private": true,
+  "version": "1.0.0",
+  "description": "JavaScript SDK runtime dependencies and lightweight tests for the feature flag control plane sample.",
+  "scripts": {
+    "test:js": "node featureflags_sdk.test.js"
+  },
+  "dependencies": {
+    "eventsource": "^3.0.7",
+    "node-fetch": "^2.7.0"
+  }
+}

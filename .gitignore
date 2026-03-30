@@ -1,0 +1,41 @@
+# Compiled binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+control-plane/control-plane
+microservice-demo/microservice-demo
+
+# Test binaries
+*.test
+
+# Go build cache
+*.out
+
+# Runtime data (JSON persistence — not source code)
+control-plane/data/
+
+# JVM crash / replay logs (from IDE processes)
+hs_err_pid*.log
+replay_pid*.log
+
+# OS artefacts
+.DS_Store
+Thumbs.db
+
+# Editor
+.idea/
+*.swp
+*.swo
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# Local JS/runtime tooling
+sdk/node_modules/
+.tools/

@@ -1,0 +1,22 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: flagplane
+
+resources:
+  - ../k8s.yaml
+  - cert-manager-certificate.yaml
+  - external-secrets.yaml
+  - kyverno-verify-images.yaml
+  - velero-schedules.yaml
+
+patches:
+  - path: patch-production-overrides.yaml
+
+images:
+  - name: ghcr.io/your-org/control-plane
+    newName: ghcr.io/jems0906/control-plane
+    newTag: v1.0.0
+  - name: ghcr.io/your-org/microservice-demo
+    newName: ghcr.io/jems0906/microservice-demo
+    newTag: v1.0.0

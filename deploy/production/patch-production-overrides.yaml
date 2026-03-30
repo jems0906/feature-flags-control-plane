@@ -1,0 +1,82 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: alertmanager
+  namespace: flagplane
+spec:
+  template:
+    spec:
+      containers:
+      - name: alertmanager
+        volumeMounts:
+        - name: config
+          mountPath: /etc/alertmanager
+        - name: webhook-secret
+          mountPath: /etc/alertmanager/secrets
+          readOnly: true
+        - name: data
+          mountPath: /alertmanager
+      volumes:
+      - $patch: replace
+      - name: config
+        secret:
+          secretName: alertmanager-config
+      - name: webhook-secret
+        secret:
+          secretName: alerting-secrets
+          items:
+          - key: webhook-url
+            path: webhook-url
+      - name: data
+        emptyDir: {}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: control-plane-ingress
+  namespace: flagplane
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    external-dns.alpha.kubernetes.io/hostname: api.flagplane.jems0906.dev
+spec:
+  ingressClassName: nginx
+  tls:
+  - hosts:
+    - api.flagplane.jems0906.dev
+    secretName: flagplane-tls
+  rules:
+  - host: api.flagplane.jems0906.dev
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: microservice-demo-ingress
+  namespace: flagplane
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    external-dns.alpha.kubernetes.io/hostname: demo.flagplane.jems0906.dev
+spec:
+  ingressClassName: nginx
+  tls:
+  - hosts:
+    - demo.flagplane.jems0906.dev
+    secretName: flagplane-tls
+  rules:
+  - host: demo.flagplane.jems0906.dev
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: grafana-ingress
+  namespace: flagplane
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    external-dns.alpha.kubernetes.io/hostname: grafana.flagplane.jems0906.dev
+spec:
+  ingressClassName: nginx
+  tls:
+  - hosts:
+    - grafana.flagplane.jems0906.dev
+    secretName: flagplane-tls
+  rules:
+  - host: grafana.flagplane.jems0906.dev
