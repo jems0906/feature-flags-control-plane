@@ -136,6 +136,28 @@ Notes:
   - control-plane: `/health`
   - demo: `/demo/health`
 
+### Render Manual Setup (Without Blueprint)
+
+If you create Render services manually (Native Go runtime), use these settings exactly.
+
+Control-plane service:
+- Root Directory: `control-plane`
+- Build Command: `go build -tags netgo -ldflags "-s -w" -o app .`
+- Start Command: `./app`
+- Environment Variables:
+  - `CONTROL_PLANE_AUTH_TOKEN=<strong-shared-token>`
+  - `REDIS_ADDR=<render-redis-internal-connection-string>`
+
+Microservice-demo service:
+- Root Directory: `microservice-demo`
+- Build Command: `go build -tags netgo -ldflags "-s -w" -o app .`
+- Start Command: `./app`
+- Environment Variables:
+  - `CONTROL_PLANE_URL=https://<your-control-plane-service>.onrender.com`
+  - `CONTROL_PLANE_AUTH_TOKEN=<same-token-as-control-plane>`
+
+If you see `go.mod file not found in current directory or any parent directory`, your Render `Root Directory` is pointing to repo root. Set it to `control-plane` or `microservice-demo` as appropriate.
+
 ## Production Readiness
 
 This repository is deployable for local clusters and demos.
