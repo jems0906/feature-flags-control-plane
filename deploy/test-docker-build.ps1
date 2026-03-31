@@ -17,7 +17,7 @@ function Write-Step {
     Write-Host $Message -ForegroundColor Yellow
 }
 
-function Build-Image {
+function New-ImageBuild {
     param(
         [string]$Label,
         [string]$Dockerfile,
@@ -89,10 +89,10 @@ $controlPlaneImage = "test-control-plane:$Timestamp"
 $demoImage = "test-microservice-demo:$Timestamp"
 
 Write-Step "`n[2/5] Building control-plane image..."
-Build-Image -Label "control-plane" -Dockerfile "deploy/Dockerfile.control-plane" -Tag $controlPlaneImage
+New-ImageBuild -Label "control-plane" -Dockerfile "deploy/Dockerfile.control-plane" -Tag $controlPlaneImage
 
 Write-Step "`n[3/5] Building microservice-demo image..."
-Build-Image -Label "microservice-demo" -Dockerfile "deploy/Dockerfile.microservice-demo" -Tag $demoImage
+New-ImageBuild -Label "microservice-demo" -Dockerfile "deploy/Dockerfile.microservice-demo" -Tag $demoImage
 
 Write-Step "`n[4/5] Inspecting built images..."
 $controlPlaneSizeMb = Get-ImageSizeMb -Tag $controlPlaneImage
