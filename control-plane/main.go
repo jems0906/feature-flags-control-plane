@@ -53,6 +53,10 @@ func main() {
 	loadFromStore(ctx)
 	log.Println("Loaded persisted config from store")
 	startStoreSync(ctx, 2*time.Second)
+	port := strings.TrimSpace(os.Getenv("PORT"))
+	if port == "" {
+		port = "8080"
+	}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /", controlPlaneLandingHandler)
@@ -81,7 +85,7 @@ func main() {
 	mux.HandleFunc("GET /config/{key}", getConfigHandler)
 
 	handler := metricsMiddleware(tracingMiddleware(authMiddleware(mux)))
-	server := &http.Server{Addr: ":8080", Handler: handler}
+	server := &http.Server{Addr: ":" + port, Handler: handler}
 
 	shutdownSignals := make(chan os.Signal, 1)
 	signal.Notify(shutdownSignals, os.Interrupt, syscall.SIGTERM)
@@ -97,7 +101,7 @@ func main() {
 		}
 	}()
 
-	log.Println("Control plane listening on :8080")
+	log.Printf("Control plane listening on :%s", port)
 	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Fatal(err)
 	}

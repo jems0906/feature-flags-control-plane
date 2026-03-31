@@ -1,0 +1,34 @@
+services:
+  - type: redis
+    name: flagplane-redis
+    plan: free
+    maxmemoryPolicy: allkeys-lru
+
+  - type: web
+    name: flagplane-control-plane
+    env: docker
+    plan: free
+    dockerfilePath: ./deploy/Dockerfile.control-plane
+    dockerContext: .
+    healthCheckPath: /health
+    envVars:
+      - key: CONTROL_PLANE_AUTH_TOKEN
+        sync: false
+      - key: REDIS_ADDR
+        fromService:
+          type: redis
+          name: flagplane-redis
+          property: connectionString
+
+  - type: web
+    name: flagplane-demo
+    env: docker
+    plan: free
+    dockerfilePath: ./deploy/Dockerfile.microservice-demo
+    dockerContext: .
+    healthCheckPath: /demo/health
+    envVars:
+      - key: CONTROL_PLANE_AUTH_TOKEN
+        sync: false
+      - key: CONTROL_PLANE_URL
+        value: https://flagplane-control-plane.onrender.com

@@ -116,6 +116,26 @@ Alerting operations guide: [docs/alerting-runbook.md](docs/alerting-runbook.md)
 
 In Kubernetes, `CONTROL_PLANE_AUTH_TOKEN` is required by the manifest and write/admin control-plane endpoints require `Authorization: Bearer <token>`.
 
+## Deploy to Render
+
+This repository includes a Render blueprint at `render.yaml` that provisions:
+- `flagplane-control-plane` (web service)
+- `flagplane-demo` (web service)
+- `flagplane-redis` (managed Redis)
+
+Steps:
+1. In Render, choose **New +** -> **Blueprint** and connect this repository.
+2. Select `render.yaml`.
+3. Set the same strong value for `CONTROL_PLANE_AUTH_TOKEN` on both web services.
+4. Deploy.
+
+Notes:
+- `REDIS_ADDR` is wired from the Render Redis connection string.
+- `CONTROL_PLANE_URL` defaults to `https://flagplane-control-plane.onrender.com` in the blueprint. If your service name differs, update that URL in `render.yaml` or in Render environment settings.
+- Health checks:
+  - control-plane: `/health`
+  - demo: `/demo/health`
+
 ## Production Readiness
 
 This repository is deployable for local clusters and demos.
